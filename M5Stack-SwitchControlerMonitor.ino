@@ -95,12 +95,13 @@ void setup() {
         M5.Lcd.println("SetReportParser Error");
     }
     
-    M5.Lcd.println("Waiting for controller...");
-
     // Initialize Serial2 for Wireless Module
     // Rx: 16, Tx: 17, 115200bps
     Serial2.begin(115200, SERIAL_8N1, 16, 17);
     M5.Lcd.println("Serial2 Started (115200)");
+
+    M5.Lcd.println("Waiting for 5 seconds...");
+    delay(5000);
 }
 
 void drawControllerInfo() {
