@@ -62,7 +62,6 @@ public:
 
         if (len < 7) return;
 
-        // 互換維持のため、フォーク元のSwitch配列解釈をそのまま残す
         padState.btnY = (buf[0] & 0x01);
         padState.btnB = (buf[0] & 0x02);
         padState.btnA = (buf[0] & 0x04);
@@ -95,7 +94,6 @@ const unsigned long SEND_INTERVAL_MS = 200;
 const unsigned long DRAW_INTERVAL_MS = 33;
 const unsigned long DEBUG_POLL_INTERVAL_MS = 200;
 
-// 最低限のデバッグ情報は残す（配線/認識トラブル時の切り分け用）
 uint8_t usbTaskState = USB_STATE_DETACHED;
 int usbIntLevel = -1;
 uint8_t max3421Revision = 0;
