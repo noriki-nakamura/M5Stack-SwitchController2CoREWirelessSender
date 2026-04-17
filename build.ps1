@@ -64,7 +64,7 @@ Write-Output "SPI: SCK=18 MOSI=23 MISO=$SelectedMisoGpio"
 Write-Output "UART(Serial2): RX=$SelectedUartRxGpio TX=$SelectedUartTxGpio"
 Write-Output "Using user library root: $UserLibrariesDir"
 
-function Ensure-CoreInstalled {
+function Install-M5StackCore {
     param([string]$Version)
     Write-Output "Checking Core m5stack:esp32@$Version..."
     $CoreList = arduino-cli core list | Out-String
@@ -78,7 +78,7 @@ function Ensure-CoreInstalled {
     arduino-cli core install m5stack:esp32@$Version
 }
 
-function Ensure-LibraryInUserFolder {
+function Install-Library {
     param(
         [string]$LibraryName,
         [string]$ExpectedDir
@@ -99,7 +99,7 @@ function Ensure-LibraryInUserFolder {
     Write-Output "Library $LibraryName installed: $ExpectedDir"
 }
 
-function Ensure-UsbHostShieldLibraryPatched {
+function Update-UsbHostShieldLibrary {
     param([string]$LibDir)
 
     $avrPinsPath = Join-Path $LibDir "avrpins.h"
@@ -166,16 +166,16 @@ typedef MAX3421e<USB_HOST_SHIELD_SS_TYPE, USB_HOST_SHIELD_INT_TYPE> MAX3421E; //
 }
 
 # 1. Core
-Ensure-CoreInstalled -Version $CoreVersion
+Install-M5StackCore -Version $CoreVersion
 
 # 2. Libraries (Documents/Arduino 配下を必須にする)
 if (!(Test-Path $UserLibrariesDir)) {
     New-Item -ItemType Directory -Path $UserLibrariesDir | Out-Null
 }
 
-Ensure-LibraryInUserFolder -LibraryName "M5Unified" -ExpectedDir (Join-Path $UserLibrariesDir "M5Unified")
-Ensure-LibraryInUserFolder -LibraryName "USB Host Shield Library 2.0" -ExpectedDir $UsbHostShieldDir
-Ensure-UsbHostShieldLibraryPatched -LibDir $UsbHostShieldDir
+Install-Library -LibraryName "M5Unified" -ExpectedDir (Join-Path $UserLibrariesDir "M5Unified")
+Install-Library -LibraryName "USB Host Shield Library 2.0" -ExpectedDir $UsbHostShieldDir
+Update-UsbHostShieldLibrary -LibDir $UsbHostShieldDir
 
 # 3. Compile
 Write-Output "Compiling $SketchName..."
