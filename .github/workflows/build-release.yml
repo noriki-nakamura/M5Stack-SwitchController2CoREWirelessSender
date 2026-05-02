@@ -1,0 +1,88 @@
+name: Build and Release
+
+on:
+  pull_request:
+    branches: main
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - board: core2
+            ss_ch: 1
+            int_ch: 1
+            bin_suffix: core2_SS-CH1_INT-CH1
+          - board: core
+            ss_ch: 1
+            int_ch: 1
+            bin_suffix: core_SS-CH1_INT-CH1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup arduino-cli
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Configure board manager URL
+        run: |
+          arduino-cli config add board_manager.additional_urls \
+            https://m5stack.oss-cn-shenzhen.aliyuncs.com/resource/arduino/package_m5stack_index.json
+
+      - name: Build
+        shell: pwsh
+        run: |
+          ./build.ps1 `
+            -ExportBinaries `
+            -Board ${{ matrix.board }} `
+            -SsChannel ${{ matrix.ss_ch }} `
+            -IntChannel ${{ matrix.int_ch }}
+
+      - name: Collect and rename binary
+        shell: bash
+        run: |
+          FQBN="m5stack:esp32:m5stack_${{ matrix.board }}"
+          FQBN_DIR="${FQBN//:/.}"
+          BIN_SRC="build/${FQBN_DIR}/M5Stack-SwitchController2CoREWirelessSender.ino.bin"
+          BIN_DST="SwitchSender_${{ matrix.bin_suffix }}.bin"
+          echo "Source: $BIN_SRC"
+          echo "Destination: $BIN_DST"
+          ls -lh "build/${FQBN_DIR}/" || true
+          cp "$BIN_SRC" "$BIN_DST"
+          echo "Binary size: $(du -h $BIN_DST | cut -f1)"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: SwitchSender_${{ matrix.bin_suffix }}
+          path: SwitchSender_${{ matrix.bin_suffix }}.bin
+          retention-days: 90
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: release-bins
+          merge-multiple: true
+
+      - name: List release binaries
+        run: ls -lh release-bins/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: release-bins/*.bin
+          generate_release_notes: true
