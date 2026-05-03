@@ -1,0 +1,117 @@
+name: Build and Release
+
+on:
+  pull_request:
+    branches: main
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - board: core2
+            ss_ch: 1
+            int_ch: 1
+            bin_suffix: core2_SS-CH1_INT-CH1
+          - board: core
+            ss_ch: 1
+            int_ch: 1
+            bin_suffix: core_SS-CH1_INT-CH1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup arduino-cli
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Cache Arduino15
+        uses: actions/cache@v5
+        with:
+          path: ~\AppData\Local\Arduino15
+          key: ${{ runner.os }}-arduino15-${{ hashFiles('build.ps1') }}
+          restore-keys: |
+            ${{ runner.os }}-arduino15-
+
+      - name: Cache Libraries
+        uses: actions/cache@v5
+        with:
+          path: ~\Documents\Arduino\libraries
+          key: ${{ runner.os }}-arduino-libs-${{ hashFiles('build.ps1') }}
+          restore-keys: |
+            ${{ runner.os }}-arduino-libs-
+
+      - name: Configure board manager URL
+        run: arduino-cli config add board_manager.additional_urls https://m5stack.oss-cn-shenzhen.aliyuncs.com/resource/arduino/package_m5stack_index.json
+
+      - name: Build
+        shell: pwsh
+        run: |
+          .\build.ps1 `
+            -ExportBinaries `
+            -Board ${{ matrix.board }} `
+            -SsChannel ${{ matrix.ss_ch }} `
+            -IntChannel ${{ matrix.int_ch }}
+
+      - name: Collect and rename binary
+        id: collect
+        shell: pwsh
+        run: |
+          $fqbn = "m5stack:esp32:m5stack_${{ matrix.board }}"
+          $fqbnDir = $fqbn -replace ":", "."
+          $buildDir = "build\$fqbnDir"
+          
+          # Determine version string (SHA7 for PRs/Push, Tag name for Tags)
+          $ver = ""
+          if ("${{ github.event_name }}" -eq "pull_request") {
+              $ver = "${{ github.event.pull_request.head.sha }}".Substring(0, 7)
+          } elseif ("${{ github.ref }}".StartsWith("refs/tags/")) {
+              $ver = "${{ github.ref_name }}"
+          } else {
+              $ver = "${{ github.sha }}".Substring(0, 7)
+          }
+          
+          $prefix = "SwitchSender_${ver}_${{ matrix.bin_suffix }}"
+          
+          Copy-Item "$buildDir\M5Stack-SwitchController2CoREWirelessSender.ino.bin" "$prefix.bin"
+          Copy-Item "$buildDir\M5Stack-SwitchController2CoREWirelessSender.ino.bootloader.bin" "$prefix.bootloader.bin"
+          Copy-Item "$buildDir\M5Stack-SwitchController2CoREWirelessSender.ino.partitions.bin" "$prefix.partitions.bin"
+          
+          Write-Output "Collected binaries with prefix: $prefix"
+          Get-ChildItem "$prefix*" | Select-Object Name, Length
+          echo "version=$ver" >> $env:GITHUB_OUTPUT
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: SwitchSender_${{ steps.collect.outputs.version }}_${{ matrix.bin_suffix }}
+          path: SwitchSender_*_${{ matrix.bin_suffix }}*.bin
+          retention-days: 90
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: release-bins
+          merge-multiple: true
+
+      - name: List release binaries
+        run: ls -lh release-bins/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: release-bins/*.bin
+          generate_release_notes: true

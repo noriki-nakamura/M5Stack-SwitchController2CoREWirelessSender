@@ -1,2 +1,5 @@
 # Build configuration
 config.json
+
+# Compiled binaries (arduino-cli --export-binaries output)
+build/

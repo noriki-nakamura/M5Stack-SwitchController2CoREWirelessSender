@@ -6,7 +6,8 @@ param (
     [int]$SsChannel = 1,
     [ValidateRange(1, 2)]
     [int]$IntChannel = 1,
-    [switch]$SkipUpload
+    [switch]$SkipUpload,
+    [switch]$ExportBinaries
 )
 
 $ErrorActionPreference = "Stop"
@@ -201,7 +202,20 @@ $ExtraFlags = @(
 ) -join " "
 
 Write-Output "Build flags: $ExtraFlags"
-arduino-cli compile --fqbn $FQBN --libraries $UserLibrariesDir --build-property "build.extra_flags=$ExtraFlags" .
+
+$CompileArgs = @(
+    "compile",
+    "--fqbn", $FQBN,
+    "--libraries", $UserLibrariesDir,
+    "--build-property", "build.extra_flags=$ExtraFlags"
+)
+if ($ExportBinaries) {
+    $CompileArgs += "--export-binaries"
+    Write-Output "ExportBinaries: enabled"
+}
+$CompileArgs += "."
+
+& arduino-cli @CompileArgs
 
 if ($LASTEXITCODE -ne 0) {
     Write-Output "Build failed!"
@@ -209,7 +223,24 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Output "Build successful!"
 
-# 4. Upload
+# 4. Export binaries (--export-binaries)
+if ($ExportBinaries) {
+    $FqbnDir = $FQBN -replace ":", "."
+    $BuildOutputDir = Join-Path $PSScriptRoot "build" $FqbnDir
+    Write-Output ""
+    Write-Output "--- Export Binaries ---"
+    Write-Output "Output directory: $BuildOutputDir"
+    $BinFiles = Get-ChildItem -Path $BuildOutputDir -Filter "*.bin" -ErrorAction SilentlyContinue
+    if ($BinFiles) {
+        foreach ($f in $BinFiles) {
+            Write-Output "  $($f.FullName)"
+        }
+    }
+    Write-Output "ExportBinaries: done. Skipping upload."
+    exit 0
+}
+
+# 5. Upload
 if ($SkipUpload) {
     Write-Output "SkipUpload specified. Build only."
     exit 0
