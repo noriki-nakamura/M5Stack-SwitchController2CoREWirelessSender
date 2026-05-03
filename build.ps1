@@ -175,26 +175,33 @@ function Update-UsbHostShieldLibrary {
         Write-Output "Patched avrpins.h with missing Core/Core2 pin aliases."
     }
 
-    # --- Patch 2: CoreS3 用 P10 (CORES3 ブロックに挿入) ---
-    # P10 は ESP32 汎用ブロックには存在するが CORES3 ブロックには存在しない。
-    # CoreS3 ビルドでは #elif により ESP32 ブロックがスキップされるため、
-    # CORES3 ブロック末尾 (MAKE_PIN(P14, 14); // INT の後) に追加する必要がある。
-    $coreS3P10Pattern = 'MAKE_PIN\(P10,\s*10\)'
-    $coreS3BlockPattern = '(?s)(?<=#elif defined\(ARDUINO_M5STACK_CORES3\)).*?(?=#elif|#else|#endif|\z)'
-    $coreS3Block = [regex]::Match($avrPinsText, $coreS3BlockPattern)
-    $p10InCoreS3 = $coreS3Block.Success -and ($coreS3Block.Value -match $coreS3P10Pattern)
+    # --- Patch 2: CoreS3 用 P10 (CORES3 専用ブロックに挿入) ---
+    # ライブラリが新しく ARDUINO_M5STACK_CORES3 専用ブロックを持つ場合のみ処理する。
+    # 古いバージョンでは CoreS3 も ESP32 汎用ブロックで処理されるため、
+    # そのケースでは P10 は ESP32 ブロックにすでに存在し、追加不要。
+    if ($avrPinsText -match '#elif defined\(ARDUINO_M5STACK_CORES3\)') {
+        $coreS3P10Pattern = 'MAKE_PIN\(P10,\s*10\)'
+        $coreS3BlockPattern = '(?s)(?<=#elif defined\(ARDUINO_M5STACK_CORES3\)).*?(?=#elif|#else|#endif|\z)'
+        $coreS3Block = [regex]::Match($avrPinsText, $coreS3BlockPattern)
+        $p10InCoreS3 = $coreS3Block.Success -and ($coreS3Block.Value -match $coreS3P10Pattern)
 
-    if (!$p10InCoreS3) {
-        # CORES3 ブロックの末尾マーカー (MAKE_PIN(P14, 14); // INT) の後に挿入
-        $coreS3MarkerPattern = 'MAKE_PIN\(P14,\s*14\);\s*// INT'
-        $coreS3Regex = [regex]$coreS3MarkerPattern
-        if (!$coreS3Regex.IsMatch($avrPinsText)) {
-            throw "Could not find CoreS3 insertion marker in avrpins.h: $coreS3MarkerPattern"
+        if (!$p10InCoreS3) {
+            # CORES3 ブロックの末尾マーカー (MAKE_PIN(P14, 14); // INT) の後に挿入
+            $coreS3MarkerPattern = 'MAKE_PIN\(P14,\s*14\);\s*// INT'
+            $coreS3Regex = [regex]$coreS3MarkerPattern
+            if ($coreS3Regex.IsMatch($avrPinsText)) {
+                $p10Line = "MAKE_PIN(P10, 10); // CoreS3 INT CH1"
+                $avrPinsText = $coreS3Regex.Replace($avrPinsText, { param($m) $m.Value + "`r`n" + $p10Line }, 1)
+                $avrPinsModified = $true
+                Write-Output "Patched avrpins.h with CoreS3 P10 pin alias."
+            }
+            else {
+                Write-Output "Warning: ARDUINO_M5STACK_CORES3 block found but no P14 marker. Skipping P10 patch (ESP32 block will be used as fallback)."
+            }
         }
-        $p10Line = "MAKE_PIN(P10, 10); // CoreS3 INT CH1"
-        $avrPinsText = $coreS3Regex.Replace($avrPinsText, { param($m) $m.Value + "`r`n" + $p10Line }, 1)
-        $avrPinsModified = $true
-        Write-Output "Patched avrpins.h with CoreS3 P10 pin alias."
+    }
+    else {
+        Write-Output "No ARDUINO_M5STACK_CORES3 block in avrpins.h. P10 provided by ESP32 block."
     }
 
     if ($avrPinsModified) {
