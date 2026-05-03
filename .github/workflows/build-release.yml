@@ -30,6 +30,22 @@ jobs:
       - name: Setup arduino-cli
         uses: arduino/setup-arduino-cli@v2
 
+      - name: Cache Arduino15
+        uses: actions/cache@v5
+        with:
+          path: ~\AppData\Local\Arduino15
+          key: ${{ runner.os }}-arduino15-${{ hashFiles('build.ps1') }}
+          restore-keys: |
+            ${{ runner.os }}-arduino15-
+
+      - name: Cache Libraries
+        uses: actions/cache@v5
+        with:
+          path: ~\Documents\Arduino\libraries
+          key: ${{ runner.os }}-arduino-libs-${{ hashFiles('build.ps1') }}
+          restore-keys: |
+            ${{ runner.os }}-arduino-libs-
+
       - name: Configure board manager URL
         run: arduino-cli config add board_manager.additional_urls https://m5stack.oss-cn-shenzhen.aliyuncs.com/resource/arduino/package_m5stack_index.json
 
