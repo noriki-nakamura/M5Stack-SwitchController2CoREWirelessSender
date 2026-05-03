@@ -1,6 +1,6 @@
 param (
     [string]$Port = "",
-    [ValidateSet("core", "core2")]
+    [ValidateSet("core", "core2", "cores3")]
     [string]$Board = "core2",
     [string]$BinDir = ""
 )
@@ -17,8 +17,9 @@ if (!$PSBoundParameters.ContainsKey('Board') -and $Config.Board) {
 }
 
 $BoardMap = @{
-    core  = "m5stack:esp32:m5stack_core"
-    core2 = "m5stack:esp32:m5stack_core2"
+    core   = "m5stack:esp32:m5stack_core"
+    core2  = "m5stack:esp32:m5stack_core2"
+    cores3 = "m5stack:esp32:m5stack_cores3"
 }
 
 $FQBN = $BoardMap[$Board]

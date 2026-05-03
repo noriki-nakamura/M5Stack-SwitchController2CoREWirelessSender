@@ -1,6 +1,6 @@
 param (
     [string]$Port = "",
-    [ValidateSet("core", "core2")]
+    [ValidateSet("core", "core2", "cores3")]
     [string]$Board = "core2",
     [ValidateRange(1, 3)]
     [int]$SsChannel = 1,
@@ -23,32 +23,60 @@ if (!$PSBoundParameters.ContainsKey('Board') -and $Config.Board) {
 
 $CoreVersion = "3.2.5"
 $BoardMap = @{
-    core  = "m5stack:esp32:m5stack_core"
-    core2 = "m5stack:esp32:m5stack_core2"
+    core   = "m5stack:esp32:m5stack_core"
+    core2  = "m5stack:esp32:m5stack_core2"
+    cores3 = "m5stack:esp32:m5stack_cores3"
 }
 
 $SsPinMap = @{
-    core  = @(13, 5, 0)
-    core2 = @(19, 33, 0)
+    core   = @(13, 5, 0)
+    core2  = @(19, 33, 0)
+    cores3 = @(1)           # DIP SW CH1 -> GPIO 1
 }
 $IntPinMap = @{
-    core  = @(35, 34)
-    core2 = @(35, 34)
+    core   = @(35, 34)
+    core2  = @(35, 34)
+    cores3 = @(10)          # DIP SW CH1 -> GPIO 10
 }
 $MisoPinMap = @{
-    core  = 19
-    core2 = 38
+    core   = 19
+    core2  = 38
+    cores3 = 35
+}
+$SckPinMap = @{
+    core   = 18
+    core2  = 18
+    cores3 = 36
+}
+$MosiPinMap = @{
+    core   = 23
+    core2  = 23
+    cores3 = 37
 }
 $UartPinMap = @{
-    core  = @(16, 17) # RX, TX
-    core2 = @(13, 14) # RX, TX (Port C)
+    core   = @(16, 17) # RX, TX
+    core2  = @(13, 14) # RX, TX (Port C)
+    cores3 = @(18, 17) # RX, TX (Port C)
 }
 
 $FQBN = $BoardMap[$Board]
 $SketchName = "M5Stack-SwitchController2CoREWirelessSender.ino"
+
+# Validate channel range per board
+$MaxSsCh = $SsPinMap[$Board].Count
+$MaxIntCh = $IntPinMap[$Board].Count
+if ($SsChannel -gt $MaxSsCh) {
+    throw "Board '$Board' supports SS CH1-$MaxSsCh only. Got SS CH$SsChannel."
+}
+if ($IntChannel -gt $MaxIntCh) {
+    throw "Board '$Board' supports INT CH1-$MaxIntCh only. Got INT CH$IntChannel."
+}
+
 $SelectedSsGpio = $SsPinMap[$Board][$SsChannel - 1]
 $SelectedIntGpio = $IntPinMap[$Board][$IntChannel - 1]
 $SelectedMisoGpio = $MisoPinMap[$Board]
+$SelectedSckGpio = $SckPinMap[$Board]
+$SelectedMosiGpio = $MosiPinMap[$Board]
 $SelectedUartRxGpio = $UartPinMap[$Board][0]
 $SelectedUartTxGpio = $UartPinMap[$Board][1]
 
@@ -61,7 +89,7 @@ $UsbHostShieldDir = Join-Path $UserLibrariesDir "USB_Host_Shield_Library_2.0"
 
 Write-Output "--- M5Stack Build Script (Core v$CoreVersion / Board: $Board) ---"
 Write-Output "USB Module DIP: SS CH$SsChannel (GPIO$SelectedSsGpio), INT CH$IntChannel (GPIO$SelectedIntGpio)"
-Write-Output "SPI: SCK=18 MOSI=23 MISO=$SelectedMisoGpio"
+Write-Output "SPI: SCK=$SelectedSckGpio MOSI=$SelectedMosiGpio MISO=$SelectedMisoGpio"
 Write-Output "UART(Serial2): RX=$SelectedUartRxGpio TX=$SelectedUartTxGpio"
 Write-Output "Using user library root: $UserLibrariesDir"
 
@@ -119,7 +147,11 @@ function Update-UsbHostShieldLibrary {
         "MAKE_PIN(P33, 33); // Extra SS for M5Stack Core2",
         "MAKE_PIN(P34, 34); // Extra INT for M5Stack Core/Core2",
         "MAKE_PIN(P35, 35); // Extra INT for M5Stack Core/Core2",
-        "MAKE_PIN(P38, 38); // Core2 MISO"
+        "MAKE_PIN(P38, 38); // Core2 MISO",
+        "MAKE_PIN(P1,   1); // CoreS3 SS CH1",
+        "MAKE_PIN(P10, 10); // CoreS3 INT CH1",
+        "MAKE_PIN(P36, 36); // CoreS3 SCK",
+        "MAKE_PIN(P37, 37); // CoreS3 MOSI"
     )
 
     $missingPins = @()
@@ -189,8 +221,8 @@ $ExtraFlags = @(
     "-DESP32",
     "-DUSB_HOST_SHIELD_SS_TYPE=$SsType",
     "-DUSB_HOST_SHIELD_INT_TYPE=$IntType",
-    "-DPIN_SPI_SCK=18",
-    "-DPIN_SPI_MOSI=23",
+    "-DPIN_SPI_SCK=$SelectedSckGpio",
+    "-DPIN_SPI_MOSI=$SelectedMosiGpio",
     "-DPIN_SPI_MISO=$SelectedMisoGpio",
     "-DPIN_SPI_SS=$SelectedSsGpio",
     "-DUSB_MODULE_SS_CH=$SsChannel",

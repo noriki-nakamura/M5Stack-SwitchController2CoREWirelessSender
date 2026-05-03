@@ -22,6 +22,10 @@ jobs:
             ss_ch: 1
             int_ch: 1
             bin_suffix: core_SS-CH1_INT-CH1
+          - board: cores3
+            ss_ch: 1
+            int_ch: 1
+            bin_suffix: cores3_SS-CH1_INT-CH1
 
     steps:
       - name: Checkout
