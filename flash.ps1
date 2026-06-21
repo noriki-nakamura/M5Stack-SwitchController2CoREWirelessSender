@@ -22,12 +22,19 @@ $BuildDirMap = @{
 $BuildRoot = Join-Path $PSScriptRoot "build"
 
 function Get-BuildArtifactBoards {
+    if (!(Test-Path -LiteralPath $BuildRoot -PathType Container)) {
+        return @()
+    }
+
     $artifactBoards = @()
     foreach ($candidateBoard in $BoardMap.Keys) {
         $boardBuildDir = Join-Path $BuildRoot $BuildDirMap[$candidateBoard]
-        $namedExport = Join-Path $BuildRoot "SwitchSender_${candidateBoard}_*.bin"
-        if ((Test-Path -LiteralPath $boardBuildDir -PathType Container) -or
-            (Get-ChildItem -Path $namedExport -File -ErrorAction SilentlyContinue)) {
+        $hasBoardBuildDir = Test-Path -LiteralPath $boardBuildDir -PathType Container
+        $hasNamedExport = Get-ChildItem -LiteralPath $BuildRoot `
+            -Filter "SwitchSender_${candidateBoard}_*.bin" `
+            -File `
+            -ErrorAction SilentlyContinue
+        if ($hasBoardBuildDir -or $hasNamedExport) {
             $artifactBoards += $candidateBoard
         }
     }
@@ -53,7 +60,10 @@ function Test-BinDirBoardMismatch {
     # A directory containing a board-specific named export is also unambiguous.
     foreach ($candidateBoard in $BoardMap.Keys) {
         if ($candidateBoard -ne $SelectedBoard -and
-            (Get-ChildItem -Path (Join-Path $actualPath "SwitchSender_${candidateBoard}_*.bin") -File -ErrorAction SilentlyContinue)) {
+            (Get-ChildItem -LiteralPath $actualPath `
+                -Filter "SwitchSender_${candidateBoard}_*.bin" `
+                -File `
+                -ErrorAction SilentlyContinue)) {
             return $true
         }
     }
